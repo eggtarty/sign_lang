@@ -7,8 +7,9 @@ from tensorflow.keras.models import load_model
 import cv2
 import base64
 import mediapipe as mp
-from mediapipe import solutions
-from mediapipe.framework.formats import landmark_pb2
+from mediapipe.python import solutions
+from mediapipe.python.solutions import drawing_utils
+from mediapipe.python.solutions import drawing_styles
 from typing import Dict, Any
 import os
 
@@ -154,4 +155,5 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
