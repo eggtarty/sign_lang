@@ -12,10 +12,12 @@ import mediapipe as mp
 
 from tensorflow.keras.models import load_model
 from tensorflow.keras.layers import InputLayer as TFInputLayer
+from tensorflow.keras.mixed_precision import Policy as TFPolicy
 
-# -----------------------
+
+# ----------------
 # FastAPI setup
-# -----------------------
+# ----------------
 app = FastAPI(title="Sign Language Recognition API")
 
 app.add_middleware(
@@ -41,15 +43,30 @@ hands = mp_hands.Hands(
 )
 
 # -----------------------
-# Keras load patch
+# Keras load compatibility patches
 # -----------------------
 class PatchedInputLayer(TFInputLayer):
     @classmethod
     def from_config(cls, config):
-        # Some saved models use "batch_shape"; tf.keras expects "batch_input_shape"
+        # Some saved models store "batch_shape" instead of "batch_input_shape"
         if "batch_shape" in config and "batch_input_shape" not in config:
             config["batch_input_shape"] = config.pop("batch_shape")
         return super().from_config(config)
+
+
+class DTypePolicy(TFPolicy):
+    """
+    Compatibility shim for models saved with configs that reference keras.DTypePolicy.
+    TF/Keras 2.12 uses mixed_precision.Policy.
+    """
+    @classmethod
+    def from_config(cls, config):
+        if isinstance(config, dict):
+            name = config.get("name", "float32")
+        else:
+            name = str(config) if config is not None else "float32"
+        return TFPolicy(name)
+
 
 # -----------------------
 # Load models & labels
@@ -62,19 +79,24 @@ static_labels = np.array([])
 dynamic_labels = np.array([])
 
 try:
-    custom_objects = {"InputLayer": PatchedInputLayer}
+    custom_objects = {
+        "InputLayer": PatchedInputLayer,
+        "DTypePolicy": DTypePolicy,
+    }
 
-    static_model_path = os.path.join(MODEL_DIR, "static_model.keras")
-    dynamic_model_path = os.path.join(MODEL_DIR, "dynamic_model.keras")
+    static_model = load_model(
+        os.path.join(MODEL_DIR, "static_model.keras"),
+        custom_objects=custom_objects,
+        compile=False,
+    )
+    dynamic_model = load_model(
+        os.path.join(MODEL_DIR, "dynamic_model.keras"),
+        custom_objects=custom_objects,
+        compile=False,
+    )
 
-    static_labels_path = os.path.join(MODEL_DIR, "labels_static.npy")
-    dynamic_labels_path = os.path.join(MODEL_DIR, "labels_dynamic.npy")
-
-    static_model = load_model(static_model_path, custom_objects=custom_objects, compile=False)
-    dynamic_model = load_model(dynamic_model_path, custom_objects=custom_objects, compile=False)
-
-    static_labels = np.load(static_labels_path, allow_pickle=True)
-    dynamic_labels = np.load(dynamic_labels_path, allow_pickle=True)
+    static_labels = np.load(os.path.join(MODEL_DIR, "labels_static.npy"), allow_pickle=True)
+    dynamic_labels = np.load(os.path.join(MODEL_DIR, "labels_dynamic.npy"), allow_pickle=True)
 
     print("✅ Models loaded successfully")
     print(f"✅ Static labels: {len(static_labels)}")
@@ -87,14 +109,15 @@ except Exception as e:
     static_labels = np.array([])
     dynamic_labels = np.array([])
 
+
 # -----------------------
 # Feature extraction helpers
 # -----------------------
 def get_120_features(coords_seq: List[np.ndarray]) -> np.ndarray:
     """
     Extract 120 features from coordinate sequence:
-    - 60 bone vector features
-    - 60 velocity features
+    - 60 bone vector features (wrist->landmarks 1..20)
+    - 60 velocity features (diff of bone features)
     """
     all_frame_feats = []
     for frame in coords_seq:
@@ -104,21 +127,19 @@ def get_120_features(coords_seq: List[np.ndarray]) -> np.ndarray:
         if scale > 0:
             norm_frame /= scale
 
-        # Bone vectors from wrist to other landmarks (1..20)
-        bones = np.array([norm_frame[i] - norm_frame[0] for i in range(1, 21)]).flatten()
+        bones = np.array([norm_frame[i] - norm_frame[0] for i in range(1, 21)]).flatten()  # (60,)
         all_frame_feats.append(bones)
 
     all_frame_feats = np.array(all_frame_feats)  # (T, 60)
 
-    # Velocity features
     if all_frame_feats.shape[0] < 2:
         velocity = np.zeros_like(all_frame_feats)
     else:
         velocity = np.diff(all_frame_feats, axis=0)
         velocity = np.vstack([velocity, np.zeros((1, 60))])
 
-    # Concatenate bones + velocity -> (T, 120)
-    return np.concatenate([all_frame_feats, velocity], axis=1)
+    return np.concatenate([all_frame_feats, velocity], axis=1)  # (T, 120)
+
 
 def calculate_motion_intensity(features_120: np.ndarray, window_size: int = 5) -> float:
     if len(features_120) < window_size:
@@ -127,12 +148,14 @@ def calculate_motion_intensity(features_120: np.ndarray, window_size: int = 5) -
     motion_magnitudes = np.linalg.norm(velocities, axis=1)
     return float(np.mean(motion_magnitudes))
 
+
 def pad_sequence_to_length(sequence: List[np.ndarray], target_length: int) -> List[np.ndarray]:
     if len(sequence) >= target_length:
         return sequence[-target_length:]
     padding_needed = target_length - len(sequence)
     padding = [sequence[-1]] * padding_needed if sequence else [np.zeros((21, 3))] * padding_needed
     return sequence + padding
+
 
 def extract_features_from_image(image: np.ndarray) -> np.ndarray | None:
     """Extract 120 features from hand landmarks for static prediction (single frame -> 120)."""
@@ -145,12 +168,13 @@ def extract_features_from_image(image: np.ndarray) -> np.ndarray | None:
     landmarks = results.multi_hand_landmarks[0]
     coords = np.array([[lm.x, lm.y, lm.z] for lm in landmarks.landmark])  # (21, 3)
 
-    features = get_120_features([coords])  # (1, 120)
-    return features[0]  # (120,)
+    feats = get_120_features([coords])  # (1, 120)
+    return feats[0]  # (120,)
 
-# -----------------------
+
+# -------------
 # API routes
-# -----------------------
+# -------------
 @app.get("/")
 def read_root():
     return {
@@ -160,20 +184,21 @@ def read_root():
             "/health": "Check API health",
             "/predict": "POST with base64 image",
             "/predict/dynamic": "POST with base64 image sequence",
-            "/gestures": "Get available gestures"
-        }
+            "/gestures": "Get available gestures",
+        },
     }
+
 
 @app.get("/health")
 def health_check():
     return {
         "status": "healthy",
-        "models_loaded": static_model is not None and dynamic_model is not None,
         "static_loaded": static_model is not None,
         "dynamic_loaded": dynamic_model is not None,
         "static_labels_count": int(len(static_labels)),
         "dynamic_labels_count": int(len(dynamic_labels)),
     }
+
 
 @app.get("/gestures")
 def get_gestures():
@@ -182,9 +207,10 @@ def get_gestures():
         "dynamic_gestures": dynamic_labels.tolist(),
     }
 
+
 @app.post("/predict")
 async def predict(data: Dict[str, Any]):
-    """Predict static sign from one base64 image."""
+    """Predict sign language gesture from a base64 image (static)."""
     try:
         if static_model is None or static_labels is None or len(static_labels) == 0:
             raise HTTPException(status_code=500, detail="Static model/labels not loaded")
@@ -205,11 +231,13 @@ async def predict(data: Dict[str, Any]):
 
         features = extract_features_from_image(image)
         if features is None:
-            return JSONResponse({
-                "success": False,
-                "prediction": "No hand detected",
-                "confidence": 0.0
-            })
+            return JSONResponse(
+                {
+                    "success": False,
+                    "prediction": "No hand detected",
+                    "confidence": 0.0,
+                }
+            )
 
         features = features.reshape(1, 120)
 
@@ -233,6 +261,7 @@ async def predict(data: Dict[str, Any]):
         print(f"Prediction error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/predict/dynamic")
 async def predict_dynamic(data: Dict[str, Any]):
     """Predict dynamic gesture from a sequence of base64 images."""
@@ -244,7 +273,6 @@ async def predict_dynamic(data: Dict[str, Any]):
         if not images_base64:
             raise HTTPException(status_code=400, detail="No images provided")
 
-        # Extract coords per frame
         all_coords: List[np.ndarray] = []
         for i, img_base64 in enumerate(images_base64[:SEQ_LEN]):
             try:
@@ -264,18 +292,20 @@ async def predict_dynamic(data: Dict[str, Any]):
                     landmarks = results.multi_hand_landmarks[0]
                     coords = np.array([[lm.x, lm.y, lm.z] for lm in landmarks.landmark])  # (21,3)
                     all_coords.append(coords)
-            except Exception as e:
-                print(f"Frame {i} processing error: {e}")
+            except Exception as fe:
+                print(f"Frame {i} processing error: {fe}")
                 continue
 
         if len(all_coords) < MIN_DYNAMIC_FRAMES:
-            return JSONResponse({
-                "success": False,
-                "prediction": f"Insufficient data: {len(all_coords)}/{MIN_DYNAMIC_FRAMES} frames",
-                "confidence": 0.0,
-                "frames_collected": len(all_coords),
-                "min_required": MIN_DYNAMIC_FRAMES,
-            })
+            return JSONResponse(
+                {
+                    "success": False,
+                    "prediction": f"Insufficient data: {len(all_coords)}/{MIN_DYNAMIC_FRAMES} frames",
+                    "confidence": 0.0,
+                    "frames_collected": len(all_coords),
+                    "min_required": MIN_DYNAMIC_FRAMES,
+                }
+            )
 
         # Pad or crop to SEQ_LEN
         if len(all_coords) < SEQ_LEN:
@@ -283,16 +313,18 @@ async def predict_dynamic(data: Dict[str, Any]):
         else:
             all_coords = all_coords[-SEQ_LEN:]
 
-        features_120 = get_120_features(all_coords)           # (SEQ_LEN, 120)
+        features_120 = get_120_features(all_coords)  # (SEQ_LEN, 120)
         motion_intensity = calculate_motion_intensity(features_120, window_size=3)
 
-        input_data = features_120.reshape(1, SEQ_LEN, 120)    # (1, SEQ_LEN, 120)
+        input_data = features_120.reshape(1, SEQ_LEN, 120)
 
         prediction = dynamic_model.predict(input_data, verbose=0)
         label_idx = int(np.argmax(prediction))
         confidence = float(np.max(prediction))
 
-        label = str(dynamic_labels[label_idx]) if label_idx < len(dynamic_labels) else f"Dynamic_Label_{label_idx}"
+        label = (
+            str(dynamic_labels[label_idx]) if label_idx < len(dynamic_labels) else f"Dynamic_Label_{label_idx}"
+        )
 
         confidence_threshold = float(data.get("confidence_threshold", 0.6))
 
@@ -324,16 +356,17 @@ async def predict_dynamic(data: Dict[str, Any]):
         print(f"Dynamic prediction error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/predict/dynamic/analyze")
 async def analyze_dynamic_sequence(data: Dict[str, Any]):
-    """Analyze motion in a sequence without doing a dynamic prediction."""
+    """Analyze motion in a sequence without prediction."""
     try:
         images_base64 = data.get("images", [])
         if not images_base64:
             raise HTTPException(status_code=400, detail="No images provided")
 
         all_coords: List[np.ndarray] = []
-        for img_base64 in images_base64[:SEQ_LEN]:
+        for i, img_base64 in enumerate(images_base64[:SEQ_LEN]):
             try:
                 if "base64," in img_base64:
                     img_base64 = img_base64.split("base64,")[1]
@@ -346,12 +379,13 @@ async def analyze_dynamic_sequence(data: Dict[str, Any]):
 
                 rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                 results = hands.process(rgb)
+
                 if results.multi_hand_landmarks:
                     landmarks = results.multi_hand_landmarks[0]
                     coords = np.array([[lm.x, lm.y, lm.z] for lm in landmarks.landmark])
                     all_coords.append(coords)
-            except Exception as e:
-                print(f"Frame analysis error: {e}")
+            except Exception as fe:
+                print(f"Frame analysis error {i}: {fe}")
                 continue
 
         if len(all_coords) < 2:
@@ -383,6 +417,7 @@ async def analyze_dynamic_sequence(data: Dict[str, Any]):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/test/features")
 async def test_features():
     """Test feature extraction with dummy data."""
@@ -404,9 +439,10 @@ async def test_features():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# -----------------------
-# Run (Render-friendly)
-# -----------------------
+
+# -----
+# Run
+# -----
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
