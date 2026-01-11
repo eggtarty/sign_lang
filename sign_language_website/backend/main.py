@@ -7,6 +7,8 @@ from tensorflow.keras.models import load_model
 import cv2
 import base64
 import mediapipe as mp
+from mediapipe import solutions
+from mediapipe.framework.formats import landmark_pb2
 from typing import Dict, Any
 import os
 
@@ -150,4 +152,5 @@ def get_gestures():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
