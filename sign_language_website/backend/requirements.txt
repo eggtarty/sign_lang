@@ -7,4 +7,4 @@ tensorflow==2.12.1
 Pillow==10.1.0
 h5py==3.11.0
 python-multipart==0.0.6
-typing-extensions==4.5.0  # Explicitly set compatible version
+typing-extensions==4.5.0 
