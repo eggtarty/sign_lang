@@ -1,10 +1,9 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-numpy==1.26.4
+numpy==1.24.3 
 opencv-python-headless==4.8.1.78
 mediapipe
 tensorflow==2.12.1
 Pillow==10.1.0
-
+h5py==3.11.0  # to avoid h5py compatibility issues
 python-multipart==0.0.6
-
