@@ -1,10 +1,33 @@
-fastapi==0.100.0 
+# Web framework
+fastapi==0.100.0
 uvicorn[standard]==0.24.0
+
+# Core ML / numerical
 numpy==1.24.3
-opencv-python-headless==4.8.1.78
-mediapipe==0.10.21
+scipy==1.15.3
+
+# TensorFlow / Keras
 tensorflow==2.12.1
-Pillow==10.1.0
+keras==2.12.0
 h5py==3.11.0
+protobuf==4.25.8
+
+# MediaPipe 
+mediapipe==0.10.21
+
+# OpenCV (headless for Render)
+opencv-python-headless==4.8.1.78
+
+# Image handling
+Pillow==10.1.0
+
+# API helpers
 python-multipart==0.0.6
-typing-extensions==4.5.0 
+python-dotenv==1.2.1
+typing-extensions==4.5.0
+
+# Performance / server
+uvloop==0.22.1
+httptools==0.7.1
+watchfiles==1.1.1
+websockets==16.0
