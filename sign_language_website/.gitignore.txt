@@ -1,0 +1,41 @@
+# Python
+__pycache__
+.pyc
+.pyo
+.pyd
+.Python
+.so
+
+# Virtual environments
+venv
+env
+.virtualenv
+.venv
+
+# IDE
+.vscode
+.idea
+.swp
+.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+.log
+
+# Model checkpoints (large files)
+.h5
+.hdf5
+.ckpt
+.pth
+
+# Data files
+.csv
+.json
+.npz
+
+# Temporary files
+.tmp
+.temp
