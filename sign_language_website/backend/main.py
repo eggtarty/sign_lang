@@ -25,7 +25,7 @@ app.add_middleware(
 )
 
 # Initialize MediaPipe once
-mp_hands = mp.solutions.hands
+mp_hands = solutions.hands
 hands = mp_hands.Hands(
     static_image_mode=True,
     max_num_hands=1,
@@ -154,3 +154,4 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
