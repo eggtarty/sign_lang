@@ -1,284 +1,322 @@
-// Configuration
-const BACKEND_URL = "https://signlanguage-detector-pi6d.onrender.com";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign Language Translator</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; }
 
-// DOM Elements
-const videoElement = document.getElementById('videoElement');
-const startCameraBtn = document.getElementById('startCamera');
-const captureBtn = document.getElementById('captureBtn');
-const autoModeBtn = document.getElementById('autoMode');
-const ttsToggleBtn = document.getElementById('ttsToggle');
-
-const cameraStatus = document.getElementById('cameraStatus');
-const handStatus = document.getElementById('handStatus');
-const apiStatus = document.getElementById('apiStatus');
-const gestureText = document.getElementById('gestureText');
-const confidenceBar = document.getElementById('confidenceBar');
-const confidenceValue = document.getElementById('confidenceValue');
-const historyList = document.getElementById('historyList');
-const errorMessage = document.getElementById('errorMessage');
-const backendUrlElement = document.getElementById('backendUrl');
-
-// State
-let stream = null;
-let isCameraOn = false;
-let isAutoMode = false;
-let autoInterval = null;
-let predictionHistory = [];
-
-// TTS (Text-to-Speech)
-let lastSpoken = "";
-let ttsEnabled = true;
-
-function speak(text) {
-  if (!ttsEnabled) return;
-  if (!text) return;
-
-  // Do not speak placeholder statuses
-  if (text === "Show Your Hand" || text === "No hand detected" || text === "Error") return;
-
-  // avoid repeating the same word
-  if (text === lastSpoken) return;
-  lastSpoken = text;
-
-  // cancel any ongoing speech then speak new
-  window.speechSynthesis.cancel();
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.rate = 1.0;
-  utter.pitch = 1.0;
-  window.speechSynthesis.speak(utter);
-}
-
-// Hide error message
-function hideError() {
-  errorMessage.style.display = 'none';
-}
-
-// Show error message
-function showError(message) {
-  errorMessage.textContent = message;
-  errorMessage.style.display = 'block';
-  setTimeout(hideError, 5000);
-}
-
-// Check backend status
-async function checkBackendStatus() {
-  try {
-    const response = await fetch(`${BACKEND_URL}/health`);
-    if (response.ok) {
-      await response.json();
-      apiStatus.textContent = 'Online';
-      apiStatus.className = 'status-value online';
-      backendUrlElement.textContent = BACKEND_URL;
-      return true;
+    body {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
     }
-  } catch (error) {
-    console.error('Backend offline:', error);
-  }
 
-  apiStatus.textContent = 'Offline';
-  apiStatus.className = 'status-value offline';
-  backendUrlElement.textContent = 'Not connected';
-  showError('Backend server is offline. Please try again later.');
-  return false;
-}
-
-// Start camera
-async function startCamera() {
-  try {
-    const constraints = {
-      video: {
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-        facingMode: 'user'
-      },
-      audio: false
-    };
-
-    stream = await navigator.mediaDevices.getUserMedia(constraints);
-    videoElement.srcObject = stream;
-
-    isCameraOn = true;
-    cameraStatus.textContent = 'On';
-    cameraStatus.className = 'status-value online';
-    startCameraBtn.disabled = true;
-    captureBtn.disabled = false;
-
-    console.log('Camera started successfully');
-  } catch (error) {
-    console.error('Error accessing camera:', error);
-    showError(`Cannot access camera: ${error.message}. Please check permissions.`);
-  }
-}
-
-// Capture frame from video
-function captureFrame() {
-  if (!isCameraOn) return null;
-
-  const canvas = document.createElement('canvas');
-  canvas.width = videoElement.videoWidth;
-  canvas.height = videoElement.videoHeight;
-  const context = canvas.getContext('2d');
-
-  // Draw video frame to canvas (mirrored)
-  context.save();
-  context.scale(-1, 1);
-  context.drawImage(videoElement, -canvas.width, 0, canvas.width, canvas.height);
-  context.restore();
-
-  // Convert to base64
-  return canvas.toDataURL('image/jpeg', 0.8);
-}
-
-// Send prediction request to backend (STATIC)
-async function sendPredictionRequest(imageData) {
-  try {
-    const startTime = Date.now();
-
-    const response = await fetch(`${BACKEND_URL}/predict`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: imageData })
-    });
-
-    const result = await response.json();
-    const endTime = Date.now();
-
-    return { ...result, responseTime: endTime - startTime };
-  } catch (error) {
-    console.error('Prediction error:', error);
-    return {
-      success: false,
-      prediction: 'Error',
-      confidence: 0,
-      error: error.message
-    };
-  }
-}
-
-// Process captured frame
-async function processFrame() {
-  if (!isCameraOn) return;
-
-  const imageData = captureFrame();
-  if (!imageData) return;
-
-  const result = await sendPredictionRequest(imageData);
-
-  if (result.success) {
-    // Update UI
-    gestureText.textContent = result.prediction;
-    speak(result.prediction);
-
-    const confidencePercent = Math.round((result.confidence || 0) * 100);
-    confidenceBar.style.width = `${confidencePercent}%`;
-    confidenceValue.textContent = `${confidencePercent}%`;
-
-    // Update hand status
-    handStatus.textContent = 'Yes';
-    handStatus.className = 'status-value online';
-
-    // Add to history
-    addToHistory(result.prediction, confidencePercent, result.responseTime);
-  } else {
-    handStatus.textContent = 'No';
-    handStatus.className = 'status-value offline';
-
-    if (result.prediction === 'No hand detected' || result.prediction === 'No hand detected') {
-      gestureText.textContent = 'Show Your Hand';
-    } else {
-      showError(result.error || 'Prediction failed.');
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
     }
-  }
-}
 
-// Add to prediction history
-function addToHistory(gesture, confidence, responseTime) {
-  const timestamp = new Date().toLocaleTimeString();
-  const historyItem = { gesture, confidence, timestamp, responseTime };
+    header {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: white;
+      padding: 30px;
+      text-align: center;
+    }
 
-  predictionHistory.unshift(historyItem);
-  if (predictionHistory.length > 5) predictionHistory = predictionHistory.slice(0, 5);
+    header h1 {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      background: linear-gradient(45deg, #00e676, #00c853);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
 
-  updateHistoryDisplay();
-}
+    .main-content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      padding: 30px;
+    }
 
-// Update history display
-function updateHistoryDisplay() {
-  historyList.innerHTML = '';
+    @media (max-width: 768px) {
+      .main-content { grid-template-columns: 1fr; }
+    }
 
-  if (predictionHistory.length === 0) {
-    historyList.innerHTML = `
-      <div class="history-item">
-        <span>No predictions yet</span>
-        <span>-</span>
+    .camera-section { position: relative; }
+
+    .camera-container {
+      width: 100%;
+      height: 400px;
+      background: #000;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 20px;
+      position: relative;
+    }
+
+    #videoElement {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+
+    .camera-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      border: 3px solid #00e676;
+      border-radius: 10px;
+      pointer-events: none;
+    }
+
+    .controls {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+    .btn-success { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; }
+    .btn-secondary { background: #6c757d; color: white; }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+
+    .select {
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .status-bar {
+      display: flex;
+      gap: 20px;
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .status-item { display: flex; flex-direction: column; }
+    .status-label { font-size: 0.9rem; color: #666; }
+    .status-value { font-weight: 600; font-size: 1.1rem; }
+    .status-value.online { color: #28a745; }
+    .status-value.offline { color: #dc3545; }
+
+    .result-section {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: white;
+      border-radius: 15px;
+      padding: 30px;
+    }
+
+    .prediction-display { text-align: center; margin-bottom: 30px; }
+
+    .gesture-text {
+      font-size: 4rem;
+      font-weight: 800;
+      margin: 20px 0;
+      background: linear-gradient(45deg, #00e676, #00c853);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      min-height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .confidence-meter { margin-bottom: 30px; }
+
+    .meter-bar {
+      height: 20px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 10px 0;
+    }
+
+    .meter-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #2196F3, #21CBF3);
+      border-radius: 10px;
+      transition: width 0.5s ease;
+      width: 0%;
+    }
+
+    .meter-labels { display:flex; justify-content: space-between; color: #bbdefb; }
+
+    .history {
+      background: rgba(255,255,255,0.05);
+      border-radius: 10px;
+      padding: 20px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .history-item {
+      display:flex; justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .history-item:last-child { border-bottom: none; }
+
+    footer {
+      text-align:center;
+      padding: 20px;
+      background: #f8f9fa;
+      color: #666;
+      border-top: 1px solid #dee2e6;
+    }
+
+    .error {
+      background: #f8d7da;
+      color: #721c24;
+      padding: 15px;
+      border-radius: 8px;
+      margin: 10px 0;
+      display: none;
+    }
+
+    .instructions {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 10px;
+      margin-top: 20px;
+    }
+    .instructions h3 { margin-bottom: 10px; color:#333; }
+    .instructions ol { padding-left: 20px; color:#666; }
+    .instructions li { margin-bottom: 8px; }
+
+    .tiny {
+      font-size: 0.9rem;
+      color: #555;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>🤖 Sign Language Translator</h1>
+    <p>Real-time gesture recognition with AI</p>
+  </header>
+
+  <div class="main-content">
+    <div class="camera-section">
+      <div class="camera-container">
+        <video id="videoElement" autoplay playsinline></video>
+        <div class="camera-overlay"></div>
       </div>
-    `;
-    return;
-  }
 
-  predictionHistory.forEach(item => {
-    const historyElement = document.createElement('div');
-    historyElement.className = 'history-item';
-    historyElement.innerHTML = `
-      <span>${item.gesture}</span>
-      <span>${item.confidence}% (${item.responseTime}ms)</span>
-    `;
-    historyList.appendChild(historyElement);
-  });
-}
+      <div class="controls">
+        <button id="startCamera" class="btn btn-primary">📷 Start Camera</button>
+        <button id="captureBtn" class="btn btn-success" disabled>🤚 Capture & Analyze</button>
+        <button id="autoMode" class="btn btn-secondary">🔄 Auto Mode: OFF</button>
+        <button id="ttsToggle" class="btn btn-secondary">🔊 TTS: ON</button>
 
-// Toggle auto mode
-function toggleAutoMode() {
-  isAutoMode = !isAutoMode;
+        <select id="modeSelect" class="select" title="Prediction Mode">
+          <option value="auto">Auto (motion-based)</option>
+          <option value="static">Static (single frame)</option>
+          <option value="dynamic">Dynamic (sequence)</option>
+        </select>
+      </div>
 
-  if (isAutoMode) {
-    autoModeBtn.textContent = '🔄 Auto Mode: ON';
-    autoModeBtn.className = 'btn btn-success';
-    autoInterval = setInterval(processFrame, 2000); // Every 2 seconds
-  } else {
-    autoModeBtn.textContent = '🔄 Auto Mode: OFF';
-    autoModeBtn.className = 'btn btn-secondary';
-    clearInterval(autoInterval);
-    autoInterval = null;
-  }
-}
+      <div class="tiny">
+        Auto mode chooses Dynamic when you move; Static when you hold still. TTS speaks only when confidence ≥ 70%.
+      </div>
 
-// Toggle TTS
-function toggleTTS() {
-  ttsEnabled = !ttsEnabled;
-  ttsToggleBtn.textContent = ttsEnabled ? "🔊 TTS: ON" : "🔇 TTS: OFF";
-  if (!ttsEnabled) window.speechSynthesis.cancel();
-  // reset so it can speak again when re-enabled
-  if (ttsEnabled) lastSpoken = "";
-}
+      <div class="status-bar">
+        <div class="status-item">
+          <span class="status-label">Camera</span>
+          <span id="cameraStatus" class="status-value offline">Off</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Hand Detected</span>
+          <span id="handStatus" class="status-value offline">No</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">API Status</span>
+          <span id="apiStatus" class="status-value offline">Checking...</span>
+        </div>
+      </div>
 
-// Event Listeners
-startCameraBtn.addEventListener('click', startCamera);
-captureBtn.addEventListener('click', processFrame);
-autoModeBtn.addEventListener('click', toggleAutoMode);
-ttsToggleBtn.addEventListener('click', toggleTTS);
+      <div id="errorMessage" class="error"></div>
 
-// Initialize
-async function initialize() {
-  console.log('Initializing Sign Language Translator...');
+      <div class="instructions">
+        <h3>How to use:</h3>
+        <ol>
+          <li>Click "Start Camera" and allow camera access</li>
+          <li>Leave mode as Auto (recommended)</li>
+          <li>Use "Capture & Analyze" or enable Auto Mode</li>
+          <li>View predictions and listen to TTS</li>
+        </ol>
+      </div>
+    </div>
 
-  // Check backend status
-  const isBackendOnline = await checkBackendStatus();
+    <div class="result-section">
+      <div class="prediction-display">
+        <h2>Current Prediction</h2>
+        <div id="gestureText" class="gesture-text">Show Your Hand</div>
+      </div>
 
-  if (!isBackendOnline) {
-    showError('Cannot connect to AI server. Please try again later.');
-    startCameraBtn.disabled = true;
-  }
+      <div class="confidence-meter">
+        <h3>Confidence Level</h3>
+        <div class="meter-bar">
+          <div id="confidenceBar" class="meter-fill"></div>
+        </div>
+        <div class="meter-labels">
+          <span>0%</span>
+          <span id="confidenceValue">0%</span>
+          <span>100%</span>
+        </div>
+      </div>
 
-  // Get available gestures (optional)
-  try {
-    const response = await fetch(`${BACKEND_URL}/gestures`);
-    const data = await response.json();
-    console.log('Available gestures:', data);
-  } catch (error) {
-    console.error('Could not fetch gestures:', error);
-  }
-}
+      <div class="history">
+        <h3>Recent Predictions</h3>
+        <div id="historyList">
+          <div class="history-item">
+            <span>No predictions yet</span>
+            <span>-</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-// Start the app
-initialize()
+  <footer>
+    <p>© 2025 Sign Language Recognition System | BWS33203 Artificial Intelligence Group 9</p>
+    <p>Backend API: <span id="backendUrl">Loading...</span></p>
+  </footer>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
