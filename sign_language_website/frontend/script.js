@@ -2,11 +2,11 @@
 const BACKEND_URL = "https://signlanguage-detector-pi6d.onrender.com";
 
 // ===== Settings =====
-const SEQ_LEN = 30;                 // must match backend
+const SEQ_LEN = 30;                 
 const DYNAMIC_INTERVAL_MS = 150;    // capture frames every 150ms (~4.5s for 30 frames)
 const TTS_CONFIDENCE_MIN = 0.70;    // speak only if >= 70%
 
-// Auto motion detection settings (client-side)
+// Auto motion detection settings
 const MOTION_SAMPLE_MS = 250;       // check motion every 250ms
 const MOTION_THRESHOLD = 12;        // tune: higher = needs more movement
 const MOTION_DOWNSCALE_W = 64;      // small = faster
@@ -417,3 +417,4 @@ async function initialize() {
 }
 
 initialize();
+
