@@ -199,6 +199,45 @@ def health_check():
         "dynamic_labels_count": int(len(dynamic_labels)),
     }
 
+@app.post("/predict/dynamic")
+async def predict_dynamic(data: Dict[str, Any]):
+    try:
+        frames_data = data.get("frames", [])
+        if len(frames_data) != 30:
+            raise HTTPException(status_code=400, detail=f"Expected 30 frames, got {len(frames_data)}")
+        
+        sequence = []
+        for frame_b64 in frames_data:
+            # Decode base64 image
+            header, encoded = frame_b64.split(",", 1)
+            nparr = np.frombuffer(base64.b64decode(encoded), np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            
+            # Extract features
+            features = extract_features_from_image(img)
+            if features is not None:
+                sequence.append(features)
+            else:
+                # Pad with zeros if no hand detected in a frame
+                sequence.append(np.zeros(120)) 
+
+        # Reshape for LSTM: (batch_size, sequence_length, features) -> (1, 30, 120)
+        input_data = np.expand_dims(np.array(sequence), axis=0)
+        
+        # Predict using dynamic model
+        prediction = dynamic_model.predict(input_data, verbose=0)
+        label_idx = np.argmax(prediction)
+        confidence = float(np.max(prediction))
+        label = str(dynamic_labels[label_idx]) if dynamic_labels is not None else "Unknown"
+        
+        return {
+            "success": True,
+            "prediction": label,
+            "confidence": confidence
+        }
+    except Exception as e:
+        print(f"Dynamic Prediction Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/gestures")
 def get_gestures():
@@ -447,6 +486,7 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
 
 
 
