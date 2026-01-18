@@ -401,20 +401,32 @@ modeSelect.addEventListener('change', handleModeChange);
 async function initialize() {
   console.log('Initializing Sign Language Translator...');
 
-  const online = await checkBackendStatus();
-  if (!online) {
-    showError('Cannot connect to AI server. Please try again later.');
-    startCameraBtn.disabled = true;
-  }
+  // 1. Enable buttons
+  startCameraBtn.disabled = false;
+  apiStatus.textContent = "Connecting to server...";
+  apiStatus.className = "status-tag status-warning";
 
+  // 2. Start checking backend status without awaiting 
+  // Allow camera to work even if the backend is slow to wake up
+  checkBackendStatus().then(online => {
+    if (!online) {
+      console.warn('Backend is still waking up...');
+      // We don't disable the button here anymore, just show a warning
+    }
+  });
+
+  // 3. Fetch gestures in the background
   try {
     const response = await fetch(`${BACKEND_URL}/gestures`);
-    const data = await response.json();
-    console.log('Available gestures:', data);
+    if (response.ok) {
+      const data = await response.json();
+      console.log('Available gestures:', data);
+    }
   } catch (error) {
-    console.error('Could not fetch gestures:', error);
+    console.error('Initial gesture fetch failed (Backend might be sleeping)');
   }
 }
 
 initialize();
+
 
