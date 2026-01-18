@@ -1,5 +1,5 @@
 // Configuration
-const BACKEND_URL = "https://signlanguage-detector-qvmv.onrender.com";
+const BACKEND_URL = "https://signlanguage-detector-pi6d.onrender.com";
 
 // DOM Elements
 const videoElement = document.getElementById('videoElement');
@@ -258,4 +258,5 @@ async function initialize() {
 
 // Start the app
 initialize();
+
 
