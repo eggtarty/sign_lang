@@ -40,30 +40,33 @@ DYNAMIC_MODEL_PATH = os.path.join(MODELS_DIR, "dynamic_model.keras")
 STATIC_LABELS_PATH = os.path.join(MODELS_DIR, "labels_static.npy")
 DYNAMIC_LABELS_PATH = os.path.join(MODELS_DIR, "labels_dynamic.npy")
 
-# ===============================
-# LOAD MODELS
-# ===============================
+# =============
+# LOAD MODELS 
+# =============
 static_model = None
 dynamic_model = None
 static_labels = np.array([])
 dynamic_labels = np.array([])
 
 try:
-    static_model = tf.keras.models.load_model(STATIC_MODEL_PATH)
-    dynamic_model = tf.keras.models.load_model(DYNAMIC_MODEL_PATH)
+    # 1. Use compile=False to bypass the version conflict error
+    static_model = load_model(STATIC_MODEL_PATH, compile=False)
+    dynamic_model = load_model(DYNAMIC_MODEL_PATH, compile=False)
 
+    # 2. Re-compile the models so they are ready for real-time predictions
+    static_model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    dynamic_model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+    # 3. Load .npy label files
     static_labels = np.load(STATIC_LABELS_PATH, allow_pickle=True)
     dynamic_labels = np.load(DYNAMIC_LABELS_PATH, allow_pickle=True)
 
-    print("✅ Models loaded successfully")
-    print("✅ Static model input:", static_model.input_shape)
-    print("✅ Dynamic model input:", dynamic_model.input_shape)
-    print(f"✅ Static labels: {len(static_labels)}")
-    print(f"✅ Dynamic labels: {len(dynamic_labels)}")
-
+    print("✅ Models loaded successfully with Compatibility Fix")
+    print(f"✅ Static model input: {static_model.input_shape}")
+    print(f"✅ Dynamic model input: {dynamic_model.input_shape}")
+    
 except Exception as e:
-    print("❌ Failed to load models:", e)
-
+    print(f"❌ Failed to load models: {e}")
 
 # ===============================
 # MEDIAPIPE INIT
@@ -305,3 +308,4 @@ def predict_dynamic(req: PredictDynamicRequest):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "10000"))
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+
