@@ -84,6 +84,44 @@ async function pingHealth() {
   }
 }
 
+//mainLoop for the State-Machine Backend
+async function mainLoop() {
+    if (!isAutoMode) return;
+
+    const currentFrame = getBase64Frame(); // Get just ONE frame
+
+    const payload = {
+        session_id: "user_123", 
+        frame_b64: currentFrame,
+        motion_threshold: 0.15
+    };
+
+    try {
+        const res = await fetch(`${BACKEND_URL}/predict_frame`, { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+            // Update the UI with the prediction
+            gestureText.textContent = data.label;
+            
+            // Update confidence bar if provided
+            if (data.confidence) {
+                updateUI(data); 
+            }
+        }
+    } catch (e) {
+        console.error("API Error:", e);
+    }
+
+    // Run again immediately for smooth tracking
+    requestAnimationFrame(mainLoop);
+}
+
 async function sendFrameOnce() {
   if (!isAutoMode) return;
   if (isSending) return;
@@ -197,4 +235,5 @@ ttsBtn.addEventListener("click", () => setTTSUI(!ttsEnabled));
 setAutoUI(false);
 setTTSUI(true);
 pingHealth();
+
 
