@@ -1,32 +1,22 @@
 # Web framework
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
+pydantic==2.5.3
 
-# Core ML / numerical (Matched to your local computer)
+# Core ML / numerical
 numpy==1.26.4
 scipy>=1.10.0
 
-# TensorFlow/Keras (Matched to your local version 2.12)
-# We use -cpu version for Render to prevent Out-of-Memory errors
+# TensorFlow/Keras 
+# Use -cpu for Render deployment to stay under 512MB RAM
 tensorflow-cpu==2.12.1
 keras==2.12.0
 h5py>=3.8.0
-protobuf>=3.20.3
 
-# MediaPipe 
+# Computer Vision
 mediapipe==0.10.9
-
-# OpenCV (Headless for server)
 opencv-python-headless>=4.8.0.0
 
-# Image & Helpers
-Pillow>=10.0.0
+# Helpers
 python-multipart>=0.0.6
-python-dotenv>=1.0.0
 typing-extensions>=4.6.0
-
-# Server performance
-websockets>=12.0
-uvloop>=0.19.0; sys_platform != 'win32'
-httptools>=0.6.0
-watchfiles>=0.21.0
