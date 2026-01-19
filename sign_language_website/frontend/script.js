@@ -181,14 +181,28 @@ function computeMotionScore() {
   return diffSum / gray.length;
 }
 
-function startMotionDetection() {
-  if (motionTimer) clearInterval(motionTimer);
-  prevMotionGray = null;
-  lastMotionScore = 0;
+async function sendDynamicPrediction(imagesBase64) {
+  try {
+    const startTime = Date.now();
+    const response = await fetch(`${BACKEND_URL}/predict/dynamic`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // FIX: Changed "images" to "frames" to match your Python PredictDynamicRequest class
+      body: JSON.stringify({ frames: imagesBase64 }) 
+    });
+    
+    if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Server rejected request:', errorData);
+        return { success: false, prediction: 'Error', confidence: 0 };
+    }
 
-  motionTimer = setInterval(() => {
-    lastMotionScore = computeMotionScore();
-  }, MOTION_SAMPLE_MS);
+    const result = await response.json();
+    return { ...result, responseTime: Date.now() - startTime };
+  } catch (error) {
+    console.error('Dynamic prediction error:', error);
+    return { success: false, prediction: 'Error', confidence: 0, error: error.message };
+  }
 }
 
 // ===== Backend calls =====
@@ -428,5 +442,6 @@ async function initialize() {
 }
 
 initialize();
+
 
 
