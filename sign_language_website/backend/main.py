@@ -7,8 +7,8 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import tensorflow as tf
+from tensorflow.keras.models import load_model
 import mediapipe as mp
-
 
 # ===============================
 # FASTAPI APP
@@ -308,4 +308,5 @@ def predict_dynamic(req: PredictDynamicRequest):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "10000"))
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+
 
