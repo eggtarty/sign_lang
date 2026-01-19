@@ -51,7 +51,7 @@ let lastSpoken = "";
 let ttsEnabled = true;
 
 // ===============================
-// 1. UTILS & MOTION (Defined early)
+// 1. UTILS & UI
 // ===============================
 
 function showError(message) {
@@ -60,16 +60,56 @@ function showError(message) {
   setTimeout(() => errorMessage.style.display = 'none', 5000);
 }
 
+function applyResultToUI(result) {
+  if (result.success) {
+    gestureText.textContent = result.prediction;
+    const conf = Math.round((result.confidence || 0) * 100);
+    confidenceBar.style.width = `${conf}%`;
+    confidenceValue.textContent = `${conf}%`;
+    
+    handStatus.textContent = 'Yes';
+    handStatus.className = 'status-value online';
+
+    addToHistory(result.prediction, conf);
+
+    // TTS Logic
+    if (ttsEnabled && result.confidence >= TTS_CONFIDENCE_MIN && result.prediction !== lastSpoken) {
+        lastSpoken = result.prediction;
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(result.prediction);
+        window.speechSynthesis.speak(utter);
+    }
+  } else {
+    handStatus.textContent = 'No';
+    handStatus.className = 'status-value offline';
+    gestureText.textContent = result.prediction || "Error";
+  }
+}
+
+function addToHistory(gesture, conf) {
+    const item = { gesture, conf, time: new Date().toLocaleTimeString() };
+    predictionHistory.unshift(item);
+    if (predictionHistory.length > 5) predictionHistory.pop();
+    
+    historyList.innerHTML = predictionHistory.map(h => `
+        <div class="history-item">
+            <span>${h.gesture}</span>
+            <span>${h.conf}% (${h.time})</span>
+        </div>
+    `).join('');
+}
+
+// ===============================
+// 2. MOTION DETECTION
+// ===============================
+
 function computeMotionScore() {
   if (!isCameraOn) return 0;
   const canvas = document.createElement('canvas');
   canvas.width = MOTION_DOWNSCALE_W;
-  canvas.height = Math.round(MOTION_DOWNSCALE_W * (videoElement.videoHeight / videoElement.videoWidth || 0.75));
+  canvas.height = Math.round(MOTION_DOWNSCALE_W * (videoElement.videoHeight / videoElement.videoWidth));
   const ctx = canvas.getContext('2d');
-  ctx.save();
-  ctx.scale(-1, 1);
-  ctx.drawImage(videoElement, -canvas.width, 0, canvas.width, canvas.height);
-  ctx.restore();
+  ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
 
   const img = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
   const gray = new Uint8Array(canvas.width * canvas.height);
@@ -92,99 +132,91 @@ function computeMotionScore() {
 
 function startMotionDetection() {
   if (motionTimer) clearInterval(motionTimer);
-  prevMotionGray = null;
   motionTimer = setInterval(() => {
     lastMotionScore = computeMotionScore();
   }, MOTION_SAMPLE_MS);
 }
 
 // ===============================
-// 2. API CALLS (Fixed 422 here)
+// 3. API CALLS
 // ===============================
 
 async function sendStaticPrediction(imageData) {
   try {
-    const startTime = Date.now();
     const response = await fetch(`${BACKEND_URL}/predict`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image: imageData })
     });
-    const result = await response.json();
-    return { ...result, responseTime: Date.now() - startTime };
+    return await response.json();
   } catch (error) {
-    return { success: false, prediction: 'Error', confidence: 0, error: error.message };
+    return { success: false, prediction: 'Error', confidence: 0 };
   }
 }
 
 async function sendDynamicPrediction(imagesBase64) {
   try {
-    const startTime = Date.now();
     const response = await fetch(`${BACKEND_URL}/predict/dynamic`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      // FIXED: Changed "images" to "frames"
       body: JSON.stringify({ frames: imagesBase64 }) 
     });
-    const result = await response.json();
-    return { ...result, responseTime: Date.now() - startTime };
+    return await response.json();
   } catch (error) {
-    return { success: false, prediction: 'Error', confidence: 0, error: error.message };
+    return { success: false, prediction: 'Error', confidence: 0 };
   }
 }
 
 // ===============================
-// 3. CORE LOGIC
+// 4. CORE ENGINE
 // ===============================
 
 async function startCamera() {
   try {
-    const constraints = { video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false };
-    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
     videoElement.srcObject = stream;
     isCameraOn = true;
     cameraStatus.textContent = 'On';
     cameraStatus.className = 'status-value online';
     startCameraBtn.disabled = true;
     captureBtn.disabled = false;
-
-    startMotionDetection(); // Now defined above!
+    startMotionDetection();
+    checkBackend();
   } catch (error) {
     showError(`Camera Error: ${error.message}`);
   }
 }
 
+async function checkBackend() {
+    backendUrlElement.textContent = BACKEND_URL;
+    try {
+        const res = await fetch(`${BACKEND_URL}/health`);
+        if (res.ok) {
+            apiStatus.textContent = 'Online';
+            apiStatus.className = 'status-value online';
+        }
+    } catch(e) {
+        apiStatus.textContent = 'Offline';
+        apiStatus.className = 'status-value offline';
+    }
+}
+
 function captureFrameBase64() {
   if (!isCameraOn) return null;
   const canvas = document.createElement('canvas');
-  canvas.width = 480; // Downscale for speed
+  canvas.width = 480; 
   canvas.height = 360;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL('image/jpeg', 0.7);
+  return canvas.toDataURL('image/jpeg', 0.6);
 }
 
-function applyResultToUI(result) {
-  if (result.success) {
-    gestureText.textContent = result.prediction;
-    const conf = Math.round((result.confidence || 0) * 100);
-    confidenceBar.style.width = `${conf}%`;
-    confidenceValue.textContent = `${conf}%`;
-    
-    // TTS
-    if (ttsEnabled && result.confidence >= TTS_CONFIDENCE_MIN && result.prediction !== lastSpoken) {
-        lastSpoken = result.prediction;
-        const utter = new SpeechSynthesisUtterance(result.prediction);
-        window.speechSynthesis.speak(utter);
+async function processStaticOnce() {
+    const img = captureFrameBase64();
+    if (img) {
+        const result = await sendStaticPrediction(img);
+        applyResultToUI(result);
     }
-  } else {
-    gestureText.textContent = result.prediction || "Error";
-  }
-}
-
-async function processDynamicSequence(frames) {
-  const result = await sendDynamicPrediction(frames);
-  applyResultToUI(result);
 }
 
 function startDynamicCapture() {
@@ -193,38 +225,51 @@ function startDynamicCapture() {
   dynamicFrames = [];
   gestureText.textContent = "Capturing...";
 
-  dynamicCaptureTimer = setInterval(() => {
+  dynamicCaptureTimer = setInterval(async () => {
     const img = captureFrameBase64();
     if (img) dynamicFrames.push(img);
 
     if (dynamicFrames.length >= SEQ_LEN) {
       clearInterval(dynamicCaptureTimer);
+      const result = await sendDynamicPrediction(dynamicFrames);
       isCapturingDynamic = false;
-      processDynamicSequence(dynamicFrames);
+      applyResultToUI(result);
     }
   }, DYNAMIC_INTERVAL_MS);
 }
 
-async function processOnce() {
-  if (!isCameraOn) return;
-  const mode = modeSelect.value;
-  if (mode === "static") {
-      const img = captureFrameBase64();
-      const res = await sendStaticPrediction(img);
-      applyResultToUI(res);
-  } else {
-      startDynamicCapture();
-  }
+function toggleAutoMode() {
+    isAutoMode = !isAutoMode;
+    if (isAutoMode) {
+        autoModeBtn.textContent = '🔄 Auto Mode: ON';
+        autoModeBtn.className = 'btn btn-success';
+        autoInterval = setInterval(() => {
+            if (isCapturingDynamic) return;
+            const mode = modeSelect.value;
+            if (mode === "auto") {
+                if (lastMotionScore >= MOTION_THRESHOLD) startDynamicCapture();
+                else processStaticOnce();
+            } else if (mode === "static") {
+                processStaticOnce();
+            } else {
+                startDynamicCapture();
+            }
+        }, 3000);
+    } else {
+        autoModeBtn.textContent = '🔄 Auto Mode: OFF';
+        autoModeBtn.className = 'btn btn-secondary';
+        clearInterval(autoInterval);
+    }
 }
 
 // Listeners
 startCameraBtn.addEventListener('click', startCamera);
-captureBtn.addEventListener('click', processOnce);
+captureBtn.addEventListener('click', () => {
+    if (modeSelect.value === "static") processStaticOnce();
+    else startDynamicCapture();
+});
+autoModeBtn.addEventListener('click', toggleAutoMode);
 ttsToggleBtn.addEventListener('click', () => {
     ttsEnabled = !ttsEnabled;
     ttsToggleBtn.textContent = ttsEnabled ? "🔊 TTS: ON" : "🔇 TTS: OFF";
 });
-
-// Init
-startCameraBtn.disabled = false;
-console.log("System Ready");
