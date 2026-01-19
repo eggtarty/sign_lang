@@ -1,5 +1,4 @@
-// Configure this in Vercel env by editing the constant before deploy:
-const BACKEND_URL = "https://YOUR-RENDER-SERVICE.onrender.com";
+const BACKEND_URL = "https://signlanguage-detector-pi6d.onrender.com";
 
 let sessionId = null;
 let stream = null;
@@ -48,7 +47,6 @@ function getBase64Frame() {
   canvas.height = 360;
   const ctx = canvas.getContext("2d");
 
-  // mirror like your training + streamlit
   ctx.translate(canvas.width, 0);
   ctx.scale(-1, 1);
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -143,7 +141,6 @@ async function sendFrameOnce() {
 let loopTimer = null;
 function startAutoLoop() {
   if (loopTimer) clearInterval(loopTimer);
-  // 7 fps is a good balance (fast enough, not spamming Render)
   loopTimer = setInterval(sendFrameOnce, 140);
 }
 function stopAutoLoop() {
@@ -200,3 +197,4 @@ ttsBtn.addEventListener("click", () => setTTSUI(!ttsEnabled));
 setAutoUI(false);
 setTTSUI(true);
 pingHealth();
+
