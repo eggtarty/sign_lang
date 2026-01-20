@@ -1,33 +1,181 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
 body {
-    font-family: Arial, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: white;
+    padding: 30px;
     text-align: center;
 }
 
-video {
-    width: 640px;
-    height: 480px;
-    border: 2px solid black;
+header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+    background: linear-gradient(45deg, #00e676, #00c853);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.main-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    padding: 30px;
+}
+
+@media (max-width: 768px) {
+    .main-content { grid-template-columns: 1fr; }
+}
+
+.camera-container {
+    width: 100%;
+    height: 400px;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    position: relative;
+    border: 4px solid transparent;
+    transition: border 0.3s ease;
+}
+
+/* Pulse effect when detection is active */
+.camera-container.active {
+    border-color: #00e676;
+    box-shadow: 0 0 15px rgba(0, 230, 118, 0.5);
+}
+
+#videoElement {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
     transform: scaleX(-1);
 }
 
 .controls {
-    margin: 10px;
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
 }
 
-button, select {
-    padding: 8px;
-    margin: 5px;
+.btn, .select {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
 }
 
-.confidence {
-    width: 300px;
-    height: 20px;
-    border: 1px solid black;
-    margin: auto;
+.select {
+    background: #f1f3f5;
+    color: #495057;
+    border: 1px solid #dee2e6;
 }
 
-#confidenceBar {
+.btn-primary { background: #667eea; color: white; }
+.btn-success { background: #28a745; color: white; }
+.btn-secondary { background: #6c757d; color: white; }
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
+}
+
+.status-bar {
+    display: flex;
+    gap: 20px;
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.status-item { display: flex; flex-direction: column; }
+.status-label { font-size: 0.8rem; color: #666; text-transform: uppercase; }
+.status-value { font-weight: 700; font-size: 1rem; }
+.status-value.online { color: #28a745; }
+.status-value.offline { color: #dc3545; }
+
+.result-section {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: white;
+    border-radius: 15px;
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+}
+
+.gesture-text {
+    font-size: 4rem;
+    font-weight: 800;
+    margin: 20px 0;
+    color: #00e676;
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.meter-bar {
+    height: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 10px 0;
+}
+
+.meter-fill {
     height: 100%;
+    background: #2196F3;
     width: 0%;
-    background-color: green;
+    transition: width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.history {
+    margin-top: auto;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    padding: 15px;
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.history-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.9rem;
+}
+
+footer {
+    text-align: center;
+    padding: 20px;
+    background: #f8f9fa;
+    color: #888;
+    font-size: 0.85rem;
 }
