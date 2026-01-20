@@ -2,73 +2,117 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Sign Language AI Translator</title>
-    <link rel="stylesheet" href="style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Sign Language Translator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --accent: #6366f1;
+            --green: #10b981;
+            --text: #f8fafc;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Poppins', sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1100px;
+            background: var(--card);
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        header {
+            padding: 30px;
+            background: rgba(15, 23, 42, 0.5);
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        h1 { margin: 0; background: linear-gradient(to right, #818cf8, #34d399); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+        .main-content { display: grid; grid-template-columns: 1.5fr 1fr; gap: 30px; padding: 30px; }
+
+        .camera-container {
+            background: #000;
+            border-radius: 16px;
+            overflow: hidden;
+            aspect-ratio: 4/3;
+            border: 2px solid #334155;
+            position: relative;
+        }
+
+        video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
+
+        .btn {
+            padding: 12px; border: none; border-radius: 10px; color: white;
+            font-weight: 600; cursor: pointer; transition: 0.3s;
+        }
+
+        .btn-primary { background: var(--accent); }
+        .btn-success { background: var(--green); }
+        .btn-secondary { background: #475569; }
+
+        .status-bar {
+            display: flex; justify-content: space-between; margin-top: 20px;
+            background: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px;
+        }
+
+        .status-value.online { color: var(--green); }
+        .status-value.offline { color: #ef4444; }
+
+        .result-section { background: #0f172a; padding: 30px; border-radius: 16px; text-align: center; }
+
+        .gesture-text { font-size: 3.5rem; color: var(--green); font-weight: 800; margin: 20px 0; }
+
+        .meter-bar { height: 12px; background: #334155; border-radius: 6px; overflow: hidden; margin: 20px 0; }
+        .meter-fill { height: 100%; width: 0%; background: var(--accent); transition: 0.5s; }
+        
+        #errorMessage { color: #ef4444; font-size: 0.9rem; margin-top: 10px; display: none; }
+    </style>
 </head>
 <body>
-<div class="container">
-    <header>
-        <h1>🤖 Sign Language Translator</h1>
-        <p>Real-time gesture recognition with AI</p>
-    </header>
-
-    <div class="main-content">
-        <div class="camera-section">
-            <div class="camera-container">
-                <video id="videoElement" autoplay playsinline></video>
-                <div class="camera-overlay"></div>
-            </div>
-
-            <div class="controls">
-                <button id="startCamera" class="btn btn-primary">📷 Start Camera</button>
-                <button id="captureBtn" class="btn btn-success" disabled>🤚 Capture & Analyze</button>
-                <button id="autoMode" class="btn btn-secondary">🔄 Auto Mode: OFF</button>
-                <button id="ttsToggle" class="btn btn-secondary">🔊 TTS: ON</button>
-
-                <select id="modeSelect" class="select">
-                    <option value="auto">Auto Mode</option>
-                    <option value="static">Static Only</option>
-                    <option value="dynamic">Dynamic Only</option>
-                </select>
-            </div>
-
-            <div class="status-bar">
-                <div class="status-item">
-                    <span class="status-label">Camera</span>
-                    <span id="cameraStatus" class="status-value offline">Off</span>
+    <div class="container">
+        <header>
+            <h1>🤖 AI Sign Language Translator</h1>
+        </header>
+        <div class="main-content">
+            <div class="camera-section">
+                <div class="camera-container">
+                    <video id="videoElement" autoplay playsinline></video>
                 </div>
-                <div class="status-item">
-                    <span class="status-label">Hand</span>
-                    <span id="handStatus" class="status-value offline">No</span>
+                <div class="controls">
+                    <button id="startCamera" class="btn btn-primary">📷 Start Camera</button>
+                    <button id="captureBtn" class="btn btn-success" disabled>🤚 Capture</button>
+                    <button id="autoMode" class="btn btn-secondary">🔄 Auto: OFF</button>
                 </div>
-                <div class="status-item">
-                    <span class="status-label">API</span>
-                    <span id="apiStatus" class="status-value offline">Offline</span>
+                <div class="status-bar">
+                    <div>Status: <span id="apiStatus" class="status-value offline">Checking...</span></div>
+                    <div>Hand: <span id="handStatus" class="status-value offline">No</span></div>
                 </div>
+                <div id="errorMessage"></div>
             </div>
-            <div id="errorMessage" class="error"></div>
-        </div>
-
-        <div class="result-section">
-            <div class="prediction-display">
-                <h2>Current Prediction</h2>
+            <div class="result-section">
+                <h3>Prediction</h3>
                 <div id="gestureText" class="gesture-text">Waiting...</div>
-            </div>
-            <div class="confidence-meter">
                 <div class="meter-bar"><div id="confidenceBar" class="meter-fill"></div></div>
-                <div class="meter-labels"><span>0%</span><span id="confidenceValue">0%</span><span>100%</span></div>
-            </div>
-            <div class="history">
-                <h3>History</h3>
-                <div id="historyList"></div>
+                <div id="confidenceValue">0% Confidence</div>
             </div>
         </div>
     </div>
-    <footer>
-        <p>Backend: <span id="backendUrl">...</span></p>
-    </footer>
-</div>
-<script src="script.js"></script>
+    <script src="script.js"></script>
 </body>
-</html>
-
