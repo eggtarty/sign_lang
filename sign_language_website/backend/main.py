@@ -77,6 +77,10 @@ def process_base64_to_coords(base64_str: str):
     except: return None
     return None
 
+@app.get("/health")
+async def health_check():
+    return {"status": "online"}
+
 @app.post("/predict")
 async def predict(req: PredictRequest):
     if not req.frames:
@@ -111,3 +115,4 @@ async def predict(req: PredictRequest):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
