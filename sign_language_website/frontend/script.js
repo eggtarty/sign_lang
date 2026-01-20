@@ -163,6 +163,47 @@ function captureFrameBase64() {
   return canvas.toDataURL('image/jpeg', 0.7);
 }
 
+function updateUI(data) {
+    const textEl = document.getElementById('gestureText');
+    
+    // Only animate if the prediction changed
+    if (textEl.textContent !== data.prediction) {
+        textEl.textContent = data.prediction;
+        textEl.classList.remove('gesture-pop');
+        void textEl.offsetWidth; // Trigger reflow
+        textEl.classList.add('gesture-pop');
+    }
+
+    const conf = Math.round(data.confidence * 100);
+    document.getElementById('confidenceBar').style.width = conf + "%";
+    document.getElementById('confidenceValue').textContent = conf + "%";
+
+    // Change visualizer intensity based on confidence
+    const bars = document.querySelectorAll('.bar');
+    bars.forEach(bar => {
+        bar.style.backgroundColor = conf > 70 ? "#00e676" : "#ffc107";
+    });
+}
+
+autoBtn.onclick = () => {
+    isAutoMode = !isAutoMode;
+    const resultSection = document.querySelector('.result-section');
+    const statusText = document.getElementById('statusText');
+
+    if (isAutoMode) {
+        autoBtn.textContent = "🔄 STOP AI";
+        autoBtn.className = "btn btn-success";
+        resultSection.classList.add('active');
+        statusText.textContent = "AI IS ANALYZING...";
+        mainLoop();
+    } else {
+        autoBtn.textContent = "🔄 START AI";
+        autoBtn.className = "btn btn-secondary";
+        resultSection.classList.remove('active');
+        statusText.textContent = "AI IS STANDING BY";
+    }
+};
+
 function applyResultToUI(result) {
   if (result.success) {
     gestureText.textContent = result.prediction;
@@ -227,3 +268,4 @@ ttsToggleBtn.addEventListener('click', () => {
 // Init
 startCameraBtn.disabled = false;
 console.log("System Ready");
+
