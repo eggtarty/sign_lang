@@ -68,4 +68,12 @@ async def predict(req: PredictRequest):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-# RENDER START COMMAND: uvicorn main:app --host 0.0.0.0 --port $PORT
+import os
+import uvicorn
+
+if __name__ == "__main__":
+    # Get the port from Render's environment, defaulting to 10000 locally
+    port = int(os.environ.get("PORT", 10000))
+    # Run the server
+    uvicorn.run(app, host="0.0.0.0", port=port)
+
