@@ -45,7 +45,7 @@ hands_detector = mp_hands.Hands(
 )
 
 class PredictRequest(BaseModel):
-    image: str  
+    image: str 
 
 @app.get("/health")
 async def health():
