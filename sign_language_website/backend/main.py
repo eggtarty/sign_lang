@@ -133,9 +133,36 @@ def process_base64_to_coords(base64_str: str):
 # ===============================
 # ROUTES
 # ===============================
+# ===============================
+# ROUTES
+# ===============================
+@app.get("/")
+def root():
+    return {"message": "Sign Language API is running"}
+
 @app.get("/health")
 def health():
-    return {"status": "online", "backend": "Render Fixed"}
+    return {
+        "status": "healthy",
+        "static_loaded": static_model is not None,
+        "dynamic_loaded": dynamic_model is not None
+    }
+
+@app.get("/gestures")
+def gestures():
+    s_labels = []
+    d_labels = []
+    
+    if static_labels is not None and hasattr(static_labels, 'tolist'):
+        s_labels = static_labels.tolist()
+    
+    if dynamic_labels is not None and hasattr(dynamic_labels, 'tolist'):
+        d_labels = dynamic_labels.tolist()
+
+    return {
+        "static": s_labels,
+        "dynamic": d_labels
+    }
 
 @app.post("/predict")
 def predict_static(req: PredictRequest):
@@ -192,3 +219,4 @@ def predict_dynamic(req: PredictDynamicRequest):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
