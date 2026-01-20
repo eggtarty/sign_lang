@@ -92,4 +92,5 @@ document.getElementById('autoMode').onclick = () => {
     else clearInterval(autoTimer);
 };
 
-checkStatus(); [cite_start]// Initial check [cite: 44]
+checkStatus(); [cite_start]// Initial check 
+
