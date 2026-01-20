@@ -6,7 +6,7 @@ uvicorn[standard]==0.24.0
 numpy>=1.23.5,<2.0.0
 scipy>=1.10.0
 
-# Modern TensorFlow / Keras (Fixes 'batch_shape' error)
+# Modern TensorFlow / Keras
 tensorflow>=2.16.1
 keras>=3.0.0
 h5py>=3.10.0
@@ -31,5 +31,3 @@ uvloop==0.22.1; sys_platform != 'win32'
 httptools==0.7.1
 watchfiles==1.1.1
 websockets==16.0
-
-
