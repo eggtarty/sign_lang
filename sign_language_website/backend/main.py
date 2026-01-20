@@ -133,9 +133,6 @@ def process_base64_to_coords(base64_str: str):
 # ===============================
 # ROUTES
 # ===============================
-# ===============================
-# ROUTES
-# ===============================
 @app.get("/")
 def root():
     return {"message": "Sign Language API is running"}
@@ -150,73 +147,66 @@ def health():
 
 @app.get("/gestures")
 def gestures():
-    s_labels = []
-    d_labels = []
-    
-    if static_labels is not None and hasattr(static_labels, 'tolist'):
-        s_labels = static_labels.tolist()
-    
-    if dynamic_labels is not None and hasattr(dynamic_labels, 'tolist'):
-        d_labels = dynamic_labels.tolist()
-
-    return {
-        "static": s_labels,
-        "dynamic": d_labels
-    }
+    s_labels = static_labels.tolist() if static_labels is not None else []
+    d_labels = dynamic_labels.tolist() if dynamic_labels is not None else []
+    return {"static": s_labels, "dynamic": d_labels}
 
 @app.post("/predict")
-def predict_static(req: PredictRequest):
-    coords = process_base64_to_coords(req.image)
-    if coords is None:
-        return {"success": False, "prediction": "No hand detected", "confidence": 0.0}
+def handle_prediction(req: PredictDynamicRequest):
+    """
+    Unified endpoint that handles both Static (1 frame) and Dynamic (30 frames).
+    Matches the logic in your script.js perfectly.
+    """
+    if not req.frames or len(req.frames) == 0:
+        return {"success": False, "prediction": "No data received", "confidence": 0.0}
 
-    # Static prediction needs 120 features for the single frame
-    feats = get_120_features([coords])
-    x = feats[0].reshape(1, 120)
-    
-    preds = static_model.predict(x, verbose=0)[0]
-    idx = np.argmax(preds)
-    conf = float(preds[idx])
-    
-    return {
-        "success": True, 
-        "prediction": str(static_labels[idx]), 
-        "confidence": conf
-    }
+    # --- CASE 1: STATIC (1 FRAME) ---
+    if len(req.frames) == 1:
+        coords = process_base64_to_coords(req.frames[0])
+        if coords is None:
+            return {"success": False, "prediction": "No hand detected", "confidence": 0.0}
 
-@app.post("/predict/dynamic")
-def predict_dynamic(req: PredictDynamicRequest):
+        # Sync with local app.py feature extraction
+        feats = get_120_features([coords])
+        x = feats[0].reshape(1, 120)
+        
+        preds = static_model.predict(x, verbose=0)[0]
+        idx = np.argmax(preds)
+        return {
+            "success": True, 
+            "prediction": str(static_labels[idx]), 
+            "confidence": float(preds[idx])
+        }
+
+    # --- CASE 2: DYNAMIC (SEQUENCE) ---
     coord_sequence = []
     for f in req.frames:
         c = process_base64_to_coords(f)
         if c is not None:
             coord_sequence.append(c)
     
-    if len(coord_sequence) < 5: # Minimum frames to consider a gesture
-        return {"success": False, "prediction": "Too few frames", "confidence": 0.0}
+    if len(coord_sequence) < 5:
+        return {"success": False, "prediction": "Keep moving...", "confidence": 0.0}
 
-    # Pad sequence to match SEQ_LEN (30)
+    # Sync sequence length to 30
     if len(coord_sequence) < SEQ_LEN:
         padding = [coord_sequence[-1]] * (SEQ_LEN - len(coord_sequence))
         coord_sequence.extend(padding)
     else:
         coord_sequence = coord_sequence[-SEQ_LEN:]
 
-    # Transform to 120 features
+    # Transform to 120 features (60 bones + 60 velocity)
     feats_120 = get_120_features(coord_sequence)
     x = feats_120.reshape(1, SEQ_LEN, 120)
     
     preds = dynamic_model.predict(x, verbose=0)[0]
     idx = np.argmax(preds)
-    conf = float(preds[idx])
-    
     return {
         "success": True, 
         "prediction": str(dynamic_labels[idx]), 
-        "confidence": conf
+        "confidence": float(preds[idx])
     }
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
-
