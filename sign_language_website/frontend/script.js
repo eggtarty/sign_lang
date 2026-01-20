@@ -154,25 +154,27 @@ async function sendStaticPrediction(imageData) {
   }
 }
 
-async function predictDynamic(frameArray) {
-    // frameArray should be an array of base64 strings
-    try {
-        const response = await fetch('https://signlanguage-detector-pi6d.onrender.com/predict/dynamic', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ frames: frameArray }) 
-        });
-
-        const data = await response.json();
-        if (data.success) {
-            console.log("Dynamic Prediction:", data.prediction);
-            displayResult(data.prediction, data.confidence);
-        }
-    } catch (error) {
-        console.error("Dynamic fetch error:", error);
+async function sendDynamicPrediction(imagesBase64) {
+  try {
+    const startTime = Date.now();
+    const response = await fetch(`${BACKEND_URL}/predict/dynamic`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ frames: imagesBase64 }) 
+    });
+    
+    if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Server rejected request:', errorData);
+        return { success: false, prediction: 'Error', confidence: 0 };
     }
+
+    const result = await response.json();
+    return { ...result, responseTime: Date.now() - startTime };
+  } catch (error) {
+    console.error('Dynamic prediction error:', error);
+    return { success: false, prediction: 'Error', confidence: 0, error: error.message };
+  }
 }
 
 // ===============================
@@ -281,4 +283,5 @@ ttsToggleBtn.addEventListener('click', () => {
     ttsEnabled = !ttsEnabled;
     ttsToggleBtn.textContent = ttsEnabled ? "🔊 TTS: ON" : "🔇 TTS: OFF";
 });
+
 
