@@ -3,18 +3,26 @@ const BACKEND_URL = "https://signlanguage-detector-pi6d.onrender.com";
 
 // DOM Elements
 const videoElement = document.getElementById('videoElement');
+const startCameraBtn = document.getElementById('startCamera');
+const captureBtn = document.getElementById('captureBtn');
+const autoModeBtn = document.getElementById('autoMode');
+const handStatus = document.getElementById('handStatus');
+const apiStatus = document.getElementById('apiStatus');
 const gestureText = document.getElementById('gestureText');
 const confidenceBar = document.getElementById('confidenceBar');
 const confidenceValue = document.getElementById('confidenceValue');
-const apiStatus = document.getElementById('apiStatus');
-const handStatus = document.getElementById('handStatus');
+const historyList = document.getElementById('historyList');
+const backendUrlElement = document.getElementById('backendUrl');
 
-let isAuto = false;
-let isTTS = true; // Text-to-Speech Toggle
-let autoTimer = null;
+// State
+let isCameraOn = false;
+let isAutoMode = false;
+let isTTS = true;
+let autoInterval = null;
 let lastSpoken = "";
+let predictionHistory = [];
 
-// 1. Text-to-Speech Function
+// Text-to-Speech
 function speak(text) {
     if (!isTTS || !text || text === lastSpoken || text === "No hand detected") return;
     const utterance = new SpeechSynthesisUtterance(text);
@@ -22,81 +30,106 @@ function speak(text) {
     lastSpoken = text;
 }
 
-// 2. Health Check
-async function checkStatus() {
+// Check backend status
+async function checkBackendStatus() {
     try {
-        const res = await fetch(`${BACKEND_URL}/health`);
-        if (res.ok) {
-            apiStatus.textContent = "Online";
-            apiStatus.className = "status-value online";
+        const response = await fetch(`${BACKEND_URL}/health`);
+        if (response.ok) {
+            apiStatus.textContent = 'Online';
+            apiStatus.className = 'status-value online';
+            backendUrlElement.textContent = BACKEND_URL;
         }
-    } catch (e) {
-        apiStatus.textContent = "Offline";
-        apiStatus.className = "status-value offline";
+    } catch (error) {
+        apiStatus.textContent = 'Offline';
+        apiStatus.className = 'status-value offline';
+        backendUrlElement.textContent = 'Error Connecting';
     }
 }
 
-// 3. Camera Start
+// Start camera
 async function startCamera() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         videoElement.srcObject = stream;
-        document.getElementById('startCamera').disabled = true;
-        document.getElementById('captureBtn').disabled = false;
-    } catch (e) { alert("Camera Error: " + e.message); }
+        isCameraOn = true;
+        startCameraBtn.disabled = true;
+        captureBtn.disabled = false;
+    } catch (error) {
+        alert("Camera access denied: " + error.message);
+    }
 }
 
-// 4. Capture & Mirror Frame
+// Capture frame (Mirrored for natural interaction)
 function captureFrame() {
+    if (!isCameraOn) return null;
     const canvas = document.createElement('canvas');
     canvas.width = videoElement.videoWidth;
     canvas.height = videoElement.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1); // Mirror for natural feel
-    ctx.drawImage(videoElement, 0, 0);
+    const context = canvas.getContext('2d');
+    context.save();
+    context.scale(-1, 1);
+    context.drawImage(videoElement, -canvas.width, 0, canvas.width, canvas.height);
+    context.restore();
     return canvas.toDataURL('image/jpeg', 0.8);
 }
 
-// 5. Prediction Logic
-async function predict() {
-    const img = captureFrame();
-    if (!img) return;
-
+// Process Frame & Update History
+async function processFrame() {
+    if (!isCameraOn) return;
+    const imageData = captureFrame();
     try {
-        const res = await fetch(`${BACKEND_URL}/predict`, {
+        const response = await fetch(`${BACKEND_URL}/predict`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: img })
+            body: JSON.stringify({ image: imageData })
         });
-        const data = await res.json();
+        const result = await response.json();
         
-        if (data.success) {
-            gestureText.textContent = data.prediction;
-            speak(data.prediction); // Trigger TTS
-            const conf = Math.round(data.confidence * 100);
-            confidenceBar.style.width = conf + "%";
-            confidenceValue.textContent = conf + "%";
-            handStatus.textContent = "Yes";
+        if (result.success) {
+            gestureText.textContent = result.prediction;
+            speak(result.prediction);
+            const conf = Math.round(result.confidence * 100);
+            confidenceBar.style.width = `${conf}%`;
+            confidenceValue.textContent = `${conf}%`;
+            handStatus.textContent = 'Yes';
+            handStatus.className = 'status-value online';
+            
+            // Add to history list
+            const timestamp = new Date().toLocaleTimeString();
+            predictionHistory.unshift({ gesture: result.prediction, conf, timestamp });
+            if (predictionHistory.length > 5) predictionHistory.pop();
+            updateHistoryUI();
         } else {
-            gestureText.textContent = "Show Your Hand";
-            handStatus.textContent = "No";
+            gestureText.textContent = 'Show Your Hand';
+            handStatus.textContent = 'No';
+            handStatus.className = 'status-value offline';
         }
-    } catch (e) { console.error("Prediction Error", e); }
+    } catch (e) { console.error("API Error:", e); }
 }
 
-// Listeners
-document.getElementById('startCamera').onclick = startCamera;
-document.getElementById('captureBtn').onclick = predict;
-document.getElementById('autoMode').onclick = () => {
-    isAuto = !isAuto;
-    document.getElementById('autoMode').textContent = isAuto ? "🔄 Auto: ON" : "🔄 Auto: OFF";
-    if (isAuto) autoTimer = setInterval(predict, 2000);
-    else clearInterval(autoTimer);
-};
+function updateHistoryUI() {
+    historyList.innerHTML = predictionHistory.map(item => 
+        `<div style="margin-bottom:5px;"><b>${item.timestamp}</b>: ${item.gesture} (${item.conf}%)</div>`
+    ).join('');
+}
+
+// Toggle functions
+function toggleAutoMode() {
+    isAutoMode = !isAutoMode;
+    autoModeBtn.textContent = isAutoMode ? '🔄 Auto: ON' : '🔄 Auto: OFF';
+    autoModeBtn.className = isAutoMode ? 'btn btn-success' : 'btn btn-secondary';
+    if (isAutoMode) autoInterval = setInterval(processFrame, 2000);
+    else clearInterval(autoInterval);
+}
+
+// Event Listeners
+startCameraBtn.onclick = startCamera;
+captureBtn.onclick = processFrame;
+autoModeBtn.onclick = toggleAutoMode;
 document.getElementById('ttsToggle').onclick = () => {
     isTTS = !isTTS;
     document.getElementById('ttsToggle').textContent = isTTS ? "🔊 TTS: ON" : "🔇 TTS: OFF";
 };
 
-checkStatus();
+// Initial check
+checkBackendStatus();
