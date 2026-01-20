@@ -1,271 +1,82 @@
-// Configuration
 const BACKEND_URL = "https://signlanguage-detector-pi6d.onrender.com";
-
-// ===== Settings =====
-const SEQ_LEN = 30;                 
-const DYNAMIC_INTERVAL_MS = 150;    
-const TTS_CONFIDENCE_MIN = 0.70;    
-
-// Auto motion detection settings
-const MOTION_SAMPLE_MS = 250;       
-const MOTION_THRESHOLD = 12;        
-const MOTION_DOWNSCALE_W = 64;      
-
-// DOM Elements
-const videoElement = document.getElementById('videoElement');
-const startCameraBtn = document.getElementById('startCamera');
-const captureBtn = document.getElementById('captureBtn');
-const autoModeBtn = document.getElementById('autoMode');
-const ttsToggleBtn = document.getElementById('ttsToggle');
-const modeSelect = document.getElementById('modeSelect');
-
-const cameraStatus = document.getElementById('cameraStatus');
-const handStatus = document.getElementById('handStatus');
-const apiStatus = document.getElementById('apiStatus');
-const gestureText = document.getElementById('gestureText');
-const confidenceBar = document.getElementById('confidenceBar');
-const confidenceValue = document.getElementById('confidenceValue');
-const historyList = document.getElementById('historyList');
-const errorMessage = document.getElementById('errorMessage');
-const backendUrlElement = document.getElementById('backendUrl');
-
-// State
-let stream = null;
-let isCameraOn = false;
 let isAutoMode = false;
-let autoInterval = null;
-let predictionHistory = [];
+let frameBuffer = []; 
+let isProcessing = false;
 
-// Dynamic buffer state
-let dynamicFrames = [];
-let dynamicCaptureTimer = null;
-let isCapturingDynamic = false;
+const video = document.getElementById('videoElement');
+const autoBtn = document.getElementById('autoMode');
+const gestureText = document.getElementById('gestureText');
 
-// Motion detection state
-let motionTimer = null;
-let prevMotionGray = null;
-let lastMotionScore = 0;
-
-// TTS state
-let lastSpoken = "";
-let ttsEnabled = true;
-
-// ===============================
-// 1. UTILS & MOTION 
-// ===============================
-
-function showError(message) {
-  errorMessage.textContent = message;
-  errorMessage.style.display = 'block';
-  setTimeout(() => errorMessage.style.display = 'none', 5000);
-}
-
-function computeMotionScore() {
-  if (!isCameraOn) return 0;
-  const canvas = document.createElement('canvas');
-  canvas.width = MOTION_DOWNSCALE_W;
-  canvas.height = Math.round(MOTION_DOWNSCALE_W * (videoElement.videoHeight / videoElement.videoWidth || 0.75));
-  const ctx = canvas.getContext('2d');
-  ctx.save();
-  ctx.scale(-1, 1);
-  ctx.drawImage(videoElement, -canvas.width, 0, canvas.width, canvas.height);
-  ctx.restore();
-
-  const img = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-  const gray = new Uint8Array(canvas.width * canvas.height);
-  for (let i = 0, j = 0; i < img.length; i += 4, j++) {
-    gray[j] = (img[i] * 0.299 + img[i + 1] * 0.587 + img[i + 2] * 0.114) | 0;
-  }
-
-  if (!prevMotionGray) {
-    prevMotionGray = gray;
-    return 0;
-  }
-
-  let diffSum = 0;
-  for (let k = 0; k < gray.length; k++) {
-    diffSum += Math.abs(gray[k] - prevMotionGray[k]);
-  }
-  prevMotionGray = gray;
-  return diffSum / gray.length;
-}
-
-function startMotionDetection() {
-  if (motionTimer) clearInterval(motionTimer);
-  prevMotionGray = null;
-  motionTimer = setInterval(() => {
-    lastMotionScore = computeMotionScore();
-  }, MOTION_SAMPLE_MS);
-}
-
-// ===============================
-// 2. API CALLS 
-// ===============================
-
-async function sendStaticPrediction(imageData) {
-  try {
-    const startTime = Date.now();
-    const response = await fetch(`${BACKEND_URL}/predict`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: imageData })
-    });
-    const result = await response.json();
-    return { ...result, responseTime: Date.now() - startTime };
-  } catch (error) {
-    return { success: false, prediction: 'Error', confidence: 0, error: error.message };
-  }
-}
-
-async function sendDynamicPrediction(imagesBase64) {
-  try {
-    const startTime = Date.now();
-    const response = await fetch(`${BACKEND_URL}/predict/dynamic`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ frames: imagesBase64 }) 
-    });
-    const result = await response.json();
-    return { ...result, responseTime: Date.now() - startTime };
-  } catch (error) {
-    return { success: false, prediction: 'Error', confidence: 0, error: error.message };
-  }
-}
-
-// ===============================
-// 3. CORE LOGIC
-// ===============================
-
-async function startCamera() {
-  try {
-    const constraints = { video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false };
-    stream = await navigator.mediaDevices.getUserMedia(constraints);
-    videoElement.srcObject = stream;
-    isCameraOn = true;
-    cameraStatus.textContent = 'On';
-    cameraStatus.className = 'status-value online';
-    startCameraBtn.disabled = true;
-    captureBtn.disabled = false;
-
-    startMotionDetection(); // Now defined above!
-  } catch (error) {
-    showError(`Camera Error: ${error.message}`);
-  }
-}
-
-function captureFrameBase64() {
-  if (!isCameraOn) return null;
-  const canvas = document.createElement('canvas');
-  canvas.width = 480; // Downscale for speed
-  canvas.height = 360;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL('image/jpeg', 0.7);
-}
-
-function updateUI(data) {
-    const textEl = document.getElementById('gestureText');
-    
-    // Only animate if the prediction changed
-    if (textEl.textContent !== data.prediction) {
-        textEl.textContent = data.prediction;
-        textEl.classList.remove('gesture-pop');
-        void textEl.offsetWidth; // Trigger reflow
-        textEl.classList.add('gesture-pop');
-    }
-
-    const conf = Math.round(data.confidence * 100);
-    document.getElementById('confidenceBar').style.width = conf + "%";
-    document.getElementById('confidenceValue').textContent = conf + "%";
-
-    // Change visualizer intensity based on confidence
-    const bars = document.querySelectorAll('.bar');
-    bars.forEach(bar => {
-        bar.style.backgroundColor = conf > 70 ? "#00e676" : "#ffc107";
-    });
-}
-
-autoBtn.onclick = () => {
-    isAutoMode = !isAutoMode;
-    const resultSection = document.querySelector('.result-section');
-    const statusText = document.getElementById('statusText');
-
-    if (isAutoMode) {
-        autoBtn.textContent = "🔄 STOP AI";
-        autoBtn.className = "btn btn-success";
-        resultSection.classList.add('active');
-        statusText.textContent = "AI IS ANALYZING...";
-        mainLoop();
-    } else {
-        autoBtn.textContent = "🔄 START AI";
-        autoBtn.className = "btn btn-secondary";
-        resultSection.classList.remove('active');
-        statusText.textContent = "AI IS STANDING BY";
+// 1. Camera Initialization
+document.getElementById('startCamera').onclick = async () => {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        document.getElementById('cameraStatus').textContent = "On";
+        document.getElementById('cameraStatus').className = "status-value online";
+    } catch (err) {
+        alert("Please allow camera access.");
     }
 };
 
-function applyResultToUI(result) {
-  if (result.success) {
-    gestureText.textContent = result.prediction;
-    const conf = Math.round((result.confidence || 0) * 100);
-    confidenceBar.style.width = `${conf}%`;
-    confidenceValue.textContent = `${conf}%`;
+// 2. The Loop Logic
+async function detectionLoop() {
+    if (!isAutoMode) return;
+
+    // Capture current frame
+    const canvas = document.createElement('canvas');
+    canvas.width = 480; canvas.height = 360;
+    const ctx = canvas.getContext('2d');
     
-    // TTS
-    if (ttsEnabled && result.confidence >= TTS_CONFIDENCE_MIN && result.prediction !== lastSpoken) {
-        lastSpoken = result.prediction;
-        const utter = new SpeechSynthesisUtterance(result.prediction);
-        window.speechSynthesis.speak(utter);
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const frame = canvas.toDataURL('image/jpeg', 0.5);
+
+    // Update the buffer
+    frameBuffer.push(frame);
+    if (frameBuffer.length > 30) frameBuffer.shift();
+
+    // Send to API if not busy
+    if (!isProcessing && frameBuffer.length >= 20) {
+        isProcessing = true;
+        const mode = document.getElementById('modeSelect').value;
+        const payload = { frames: mode === 'static' ? [frame] : frameBuffer };
+
+        try {
+            const res = await fetch(`${BACKEND_URL}/predict`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.success) updateUI(data);
+        } catch (e) { console.error("API connection error"); }
+        isProcessing = false;
     }
-  } else {
-    gestureText.textContent = result.prediction || "Error";
-  }
+
+    requestAnimationFrame(detectionLoop);
 }
 
-async function processDynamicSequence(frames) {
-  const result = await sendDynamicPrediction(frames);
-  applyResultToUI(result);
-}
-
-function startDynamicCapture() {
-  if (isCapturingDynamic || !isCameraOn) return;
-  isCapturingDynamic = true;
-  dynamicFrames = [];
-  gestureText.textContent = "Capturing...";
-
-  dynamicCaptureTimer = setInterval(() => {
-    const img = captureFrameBase64();
-    if (img) dynamicFrames.push(img);
-
-    if (dynamicFrames.length >= SEQ_LEN) {
-      clearInterval(dynamicCaptureTimer);
-      isCapturingDynamic = false;
-      processDynamicSequence(dynamicFrames);
+// 3. Toggle Button Fix
+autoBtn.onclick = () => {
+    isAutoMode = !isAutoMode;
+    if (isAutoMode) {
+        autoBtn.textContent = "🔄 Auto Mode: ON";
+        autoBtn.className = "btn btn-success";
+        detectionLoop(); // Start the loop
+    } else {
+        autoBtn.textContent = "🔄 Auto Mode: OFF";
+        autoBtn.className = "btn btn-secondary";
+        frameBuffer = [];
+        gestureText.textContent = "Standing By...";
     }
-  }, DYNAMIC_INTERVAL_MS);
+};
+
+function updateUI(data) {
+    gestureText.textContent = data.prediction;
+    document.getElementById('handStatus').textContent = "Yes";
+    document.getElementById('handStatus').className = "status-value online";
+    document.getElementById('confidenceBar').style.width = (data.confidence * 100) + "%";
+    document.getElementById('confidenceValue').textContent = Math.round(data.confidence * 100) + "%";
 }
-
-async function processOnce() {
-  if (!isCameraOn) return;
-  const mode = modeSelect.value;
-  if (mode === "static") {
-      const img = captureFrameBase64();
-      const res = await sendStaticPrediction(img);
-      applyResultToUI(res);
-  } else {
-      startDynamicCapture();
-  }
-}
-
-// Listeners
-startCameraBtn.addEventListener('click', startCamera);
-captureBtn.addEventListener('click', processOnce);
-ttsToggleBtn.addEventListener('click', () => {
-    ttsEnabled = !ttsEnabled;
-    ttsToggleBtn.textContent = ttsEnabled ? "🔊 TTS: ON" : "🔇 TTS: OFF";
-});
-
-// Init
-startCameraBtn.disabled = false;
-console.log("System Ready");
-
