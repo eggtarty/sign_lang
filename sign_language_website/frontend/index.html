@@ -2,71 +2,41 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Sign Language AI Translator</title>
-    </head>
+    <title>Sign Language Translator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
 <body>
-<div class="container">
-    <header>
-        <h1>🤖 Sign Language Translator</h1>
-        <p>Real-time gesture recognition with AI</p>
-    </header>
 
-    <div class="main-content">
-        <div class="camera-section">
-            <div class="camera-container">
-                <video id="videoElement" autoplay playsinline></video>
-                <div class="camera-overlay"></div>
-            </div>
+<h1>🤖 Sign Language Translator</h1>
+<p>Real-time gesture recognition with AI</p>
 
-            <div class="controls">
-                <button id="startCamera" class="btn btn-primary">📷 Start Camera</button>
-                <button id="autoMode" class="btn btn-secondary">🔄 Auto Mode: OFF</button>
-                <button id="ttsToggle" class="btn btn-success">🔊 TTS: ON</button>
+<video id="video" autoplay></video>
 
-                <select id="modeSelect" class="select">
-                    <option value="auto">Auto (Recommended)</option>
-                    <option value="static">Static Only</option>
-                    <option value="dynamic">Dynamic Only</option>
-                </select>
-            </div>
+<div class="controls">
+    <button id="startCamera">📷 Start Camera</button>
+    <button id="autoMode">🔄 Auto Mode: OFF</button>
+    <button id="ttsToggle">🔊 TTS: ON</button>
 
-            <div class="status-bar">
-                <div class="status-item">
-                    <span class="status-label">Camera</span>
-                    <span id="cameraStatus" class="status-value offline">Off</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">Hand</span>
-                    <span id="handStatus" class="status-value offline">No</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">API</span>
-                    <span id="apiStatus" class="status-value offline">Offline</span>
-                </div>
-            </div>
-            <div id="errorMessage" class="error"></div>
-        </div>
-
-        <div class="result-section">
-            <div class="prediction-display">
-                <h2>Current Prediction</h2>
-                <div id="gestureText" class="gesture-text">Waiting...</div>
-            </div>
-            <div class="confidence-meter">
-                <div class="meter-bar"><div id="confidenceBar" class="meter-fill"></div></div>
-                <div class="meter-labels"><span>0%</span><span id="confidenceValue">0%</span><span>100%</span></div>
-            </div>
-            <div class="history">
-                <h3>History</h3>
-                <div id="historyList"></div>
-            </div>
-        </div>
-    </div>
-    <footer>
-        <p>Backend: <span id="backendUrl">...</span></p>
-    </footer>
+    <select id="modeSelect">
+        <option value="auto">Auto (Recommended)</option>
+        <option value="static">Static</option>
+        <option value="dynamic">Dynamic</option>
+    </select>
 </div>
+
+<p id="cameraStatus">Camera Off</p>
+<p id="handStatus">Hand No</p>
+<p id="apiStatus">API Offline</p>
+<p id="errorMessage"></p>
+
+<h2>Current Prediction</h2>
+<p id="gestureText">Waiting...</p>
+
+<div class="confidence">
+    <div id="confidenceBar"></div>
+</div>
+<p id="confidenceValue">0%</p>
+
 <script src="script.js"></script>
 </body>
 </html>
-
