@@ -11,7 +11,6 @@ from tensorflow.keras.models import load_model
 
 import mediapipe as mp
 from mediapipe.python.solutions import hands as mp_hands
-from mediapipe.python.solutions import drawing_utils as mp_drawing
 
 app = FastAPI()
 
@@ -28,12 +27,14 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 
 # --- Load Assets ---
-static_model = load_model(os.path.join(MODELS_DIR, "static_model.keras"), compile=False)
-dynamic_model = load_model(os.path.join(MODELS_DIR, "dynamic_model.keras"), compile=False)
-static_labels = np.load(os.path.join(MODELS_DIR, "labels_static.npy"), allow_pickle=True)
-dynamic_labels = np.load(os.path.join(MODELS_DIR, "labels_dynamic.npy"), allow_pickle=True)
-
-print("✅ Models and Labels loaded successfully")
+try:
+    static_model = load_model(os.path.join(MODELS_DIR, "static_model.keras"), compile=False)
+    dynamic_model = load_model(os.path.join(MODELS_DIR, "dynamic_model.keras"), compile=False)
+    static_labels = np.load(os.path.join(MODELS_DIR, "labels_static.npy"), allow_pickle=True)
+    dynamic_labels = np.load(os.path.join(MODELS_DIR, "labels_dynamic.npy"), allow_pickle=True)
+    print("✅ Models and Labels loaded successfully")
+except Exception as e:
+    print(f"❌ Error loading models: {e}")
 
 # --- Initialize Detector ---
 hands_detector = mp_hands.Hands(
@@ -44,7 +45,11 @@ hands_detector = mp_hands.Hands(
 )
 
 class PredictRequest(BaseModel):
-    frames: list[str]
+    image: str  
+
+@app.get("/health")
+async def health():
+    return {"status": "online"}
 
 def get_120_features(coords_seq):
     all_frame_feats = []
@@ -64,55 +69,34 @@ def get_120_features(coords_seq):
         velocity = np.vstack([velocity, np.zeros((1, 60))])
     return np.concatenate([all_frame_feats, velocity], axis=1)
 
-def process_base64_to_coords(base64_str: str):
-    try:
-        if "," in base64_str: base64_str = base64_str.split(",")[1]
-        img_bytes = base64.b64decode(base64_str)
-        np_img = np.frombuffer(img_bytes, np.uint8)
-        frame = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = hands_detector.process(rgb)
-        if results.multi_hand_landmarks:
-            return np.array([[lm.x, lm.y, lm.z] for lm in results.multi_hand_landmarks[0].landmark])
-    except: return None
-    return None
-
-@app.get("/health")
-async def health_check():
-    return {"status": "online"}
-
 @app.post("/predict")
 async def predict(req: PredictRequest):
-    if not req.frames:
-        return {"success": False, "prediction": "No data", "confidence": 0.0}
+    try:
+        header, encoded = req.image.split(",", 1)
+        data = base64.b64decode(encoded)
+        nparr = np.frombuffer(data, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        
+        results = hands_detector.process(rgb)
+        if not results.multi_hand_landmarks:
+            return {"success": False, "prediction": "No hand detected", "confidence": 0.0}
 
-    # Static Logic (1 Frame)
-    if len(req.frames) == 1:
-        coords = process_base64_to_coords(req.frames[0])
-        if coords is None: return {"success": False, "prediction": "No hand", "confidence": 0.0}
-        x = get_120_features([coords])[0].reshape(1, 120)
-        preds = static_model.predict(x, verbose=0)[0]
-        return {"success": True, "prediction": str(static_labels[np.argmax(preds)]), "confidence": float(np.max(preds))}
-
-    # Dynamic Logic (30 Frames)
-    coord_sequence = []
-    for f in req.frames:
-        c = process_base64_to_coords(f)
-        if c is not None: coord_sequence.append(c)
-    
-    if len(coord_sequence) < 5:
-        return {"success": False, "prediction": "Scanning...", "confidence": 0.0}
-
-    if len(coord_sequence) < SEQ_LEN:
-        coord_sequence += [coord_sequence[-1]] * (SEQ_LEN - len(coord_sequence))
-    else:
-        coord_sequence = coord_sequence[-SEQ_LEN:]
-
-    x = get_120_features(coord_sequence).reshape(1, SEQ_LEN, 120)
-    preds = dynamic_model.predict(x, verbose=0)[0]
-    return {"success": True, "prediction": str(dynamic_labels[np.argmax(preds)]), "confidence": float(np.max(preds))}
+        coords = np.array([[lm.x, lm.y, lm.z] for lm in results.multi_hand_landmarks[0].landmark])
+        
+        # Single frame static prediction logic
+        features = get_120_features([coords])[0].reshape(1, 120)
+        preds = static_model.predict(features, verbose=0)[0]
+        
+        idx = np.argmax(preds)
+        return {
+            "success": True, 
+            "prediction": str(static_labels[idx]), 
+            "confidence": float(preds[idx])
+        }
+    except Exception as e:
+        return {"success": False, "prediction": "Error", "error": str(e)}
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
-
