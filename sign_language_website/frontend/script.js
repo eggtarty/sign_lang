@@ -1,4 +1,4 @@
-[cite_start]// Configuration
+// Configuration
 const BACKEND_URL = "https://signlanguage-detector-pi6d.onrender.com";
 const video = document.getElementById('videoElement');
 const gestureText = document.getElementById('gestureText');
@@ -18,7 +18,7 @@ function speak(text) {
     lastSpoken = text;
 }
 
-[cite_start]// Check backend status 
+// Check backend status
 async function checkStatus() {
     try {
         const res = await fetch(`${BACKEND_URL}/health`);
@@ -26,10 +26,13 @@ async function checkStatus() {
             document.getElementById('apiStatus').textContent = "Online";
             document.getElementById('apiStatus').className = "status-value online";
         }
-    } catch (e) { console.log("Waiting for backend..."); }
+    } catch (e) { 
+        console.log("Waiting for backend..."); 
+        document.getElementById('apiStatus').textContent = "Offline";
+    }
 }
 
-[cite_start]// Start Camera 
+// Start Camera
 async function startCamera() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -39,21 +42,23 @@ async function startCamera() {
     } catch (e) { alert("Camera error: " + e.message); }
 }
 
-[cite_start]// Capture and Mirror 
+// Capture and Mirror frame for the AI
 function captureFrame() {
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
     ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1); // Mirror capture 
+    ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0);
     return canvas.toDataURL('image/jpeg', 0.8);
 }
 
-[cite_start]// Send Prediction 
+// Send Prediction
 async function predict() {
     const img = captureFrame();
+    if (!img) return;
+    
     try {
         const res = await fetch(`${BACKEND_URL}/predict`, {
             method: 'POST',
@@ -64,7 +69,7 @@ async function predict() {
         
         if (data.success) {
             gestureText.textContent = data.prediction;
-            speak(data.prediction); // Trigger TTS
+            speak(data.prediction);
             const conf = Math.round(data.confidence * 100);
             confidenceBar.style.width = conf + "%";
             confidenceValue.textContent = conf + "% Confidence";
@@ -75,22 +80,29 @@ async function predict() {
             document.getElementById('handStatus').textContent = "No";
             document.getElementById('handStatus').className = "status-value offline";
         }
-    } catch (e) { console.error("Prediction failed", e); }
+    } catch (e) { 
+        console.error("Prediction failed", e); 
+    }
 }
 
-[cite_start]
+// Event Listeners
 document.getElementById('startCamera').onclick = startCamera;
 document.getElementById('captureBtn').onclick = predict;
+
 document.getElementById('ttsToggle').onclick = () => {
     isTTS = !isTTS;
     document.getElementById('ttsToggle').textContent = isTTS ? "🔊 TTS: ON" : "🔇 TTS: OFF";
 };
+
 document.getElementById('autoMode').onclick = () => {
     isAuto = !isAuto;
     document.getElementById('autoMode').textContent = isAuto ? "🔄 Auto: ON" : "🔄 Auto: OFF";
-    if (isAuto) autoTimer = setInterval(predict, 2000); [cite_start]
-    else clearInterval(autoTimer);
+    if (isAuto) {
+        autoTimer = setInterval(predict, 2000);
+    } else {
+        clearInterval(autoTimer);
+    }
 };
 
-checkStatus(); [cite_start]// Initial check 
-
+// Initial check on load
+checkStatus();
