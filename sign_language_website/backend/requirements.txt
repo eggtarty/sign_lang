@@ -2,6 +2,6 @@ fastapi
 uvicorn
 python-multipart
 tensorflow-cpu
-mediapipe
+mediapipe==0.10.11
 opencv-python-headless
 numpy
