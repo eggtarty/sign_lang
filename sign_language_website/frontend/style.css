@@ -1,120 +1,68 @@
+/* Base Theme */
 :root {
-    --bg-color: #0f172a;
-    --card-bg: #1e293b;
-    --primary: #6366f1;
-    --success: #22c55e;
-    --danger: #ef4444;
-    --text-main: #f8fafc;
+    --dark-bg: #1a1c2c;
+    --card-bg: #24273d;
+    --neon-green: #00e676;
+    --accent-purple: #7c4dff;
+    --text: #ffffff;
 }
 
 body {
-    background-color: var(--bg-color);
-    color: var(--text-main);
-    font-family: 'Inter', sans-serif;
+    background-color: var(--dark-bg);
+    color: var(--text);
+    font-family: 'Segoe UI', sans-serif;
     margin: 0;
     padding: 20px;
+    display: flex;
+    justify-content: center;
 }
 
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-}
+.container { width: 100%; max-width: 1200px; }
 
-header {
-    text-align: left;
-    margin-bottom: 30px;
-}
-
-/* Two Column Layout */
+/* The Two-Column Layout */
 .main-content {
-    display: flex;
+    display: flex; /* This creates the side-by-side look */
     gap: 30px;
-    align-items: flex-start;
+    margin-top: 20px;
 }
 
-.camera-section {
-    flex: 1.5;
-}
+.camera-section { flex: 1.5; } /* Left side takes more space */
 
-.result-section {
-    flex: 1;
-    background: var(--card-bg);
-    padding: 30px;
+.result-section { 
+    flex: 1; 
+    background: var(--card-bg); 
+    padding: 25px; 
     border-radius: 15px;
-    min-height: 500px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
 }
 
-/* Camera UI */
+/* UI Elements */
 .camera-container {
-    width: 100%;
-    aspect-ratio: 4/3;
     background: #000;
-    border-radius: 12px;
+    border-radius: 15px;
     overflow: hidden;
-    position: relative;
-    border: 3px solid #334155;
+    border: 3px solid #393e59;
+    aspect-ratio: 4/3;
 }
 
-video {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
+video { width: 100%; height: 100%; object-fit: cover; }
 
-/* Controls & Buttons */
-.controls {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-    margin-top: 20px;
-}
-
-.btn {
-    padding: 12px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 600;
-    transition: 0.3s;
-}
-
-.btn-primary { background: #7c3aed; color: white; }
-.btn-success { background: #059669; color: white; }
-.btn-secondary { background: #475569; color: white; }
-
-/* Status Items */
-.status-bar {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 20px;
-    background: #1e293b80;
-    padding: 15px;
-    border-radius: 8px;
-}
-
-.status-value.online { color: var(--success); font-weight: bold; }
-.status-value.offline { color: var(--danger); font-weight: bold; }
-
-/* Prediction Text */
 .gesture-text {
-    font-size: 3rem;
-    color: #22c55e;
-    font-weight: 800;
+    font-size: 3.5rem;
+    color: var(--neon-green);
+    font-weight: bold;
+    text-align: center;
     margin: 20px 0;
 }
 
-/* Meter Bar */
-.meter-bar {
-    width: 100%;
-    height: 12px;
-    background: #334155;
-    border-radius: 10px;
-    overflow: hidden;
+.btn {
+    padding: 10px 18px;
+    border-radius: 8px;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.3s;
 }
 
-.meter-fill {
-    height: 100%;
-    width: 0%;
-    background: linear-gradient(to right, #6366f1, #22c55e);
-    transition: width 0.5s ease;
-}
+.btn-primary { background: var(--accent-purple); color: white; }
+.btn-success { background: var(--neon-green); color: #000; }
